@@ -1,10 +1,16 @@
 ---
-title: "Untitled"
-format: html
+title: "CPA Lab"
+Author: "Wesley Martinez"
+format: 
+  html:
+    embed-resources: true
+    code-fold: show
+    toc: true 
 execute:
-  eval: false
+  eval: true
+  message: false
+  warning: false
 ---
-
 
 ```{r setup}
 
@@ -14,51 +20,66 @@ library(ggfortify) # For PCA biplot
 
 ```
 
+use prcomp() when doing PCA (there are many others yet this is base r is best)
+
 # Principal components analysis (PCA)
 
 Principal components analysis is an ordination method allowing us to glean as much about our multivariate data as possible in a simplified number of dimensions.
 
-Here, we'll use [data from the Human Development Index](https://hdr.undp.org/data-center).  Quick overview of the HDI:
+Here, we'll use [data from the Human Development Index](https://hdr.undp.org/data-center). Quick overview of the HDI:
 
 > The Human Development Index (HDI) is a summary measure of average achievement in key dimensions of human development: a long and healthy life, being knowledgeable and having a decent standard of living. The HDI is the geometric mean of normalized indices for each of the three dimensions.
 
 > The health dimension is assessed by life expectancy at birth, the education dimension is measured by mean of years of schooling for adults aged 25 years and more and expected years of schooling for children of school entering age. The standard of living dimension is measured by gross national income per capita. The HDI uses the logarithm of income, to reflect the diminishing importance of income with increasing GNI. The scores for the three HDI dimension indices are then aggregated into a composite index using geometric mean. Refer to Technical notes for more details.
 
-
 Load in the data using `read_csv`. Perform some exploratory analysis on the data to get a better grasp of the structure. What do we need for pca to work? What variable needs to be transformed according to the information presented above?
 
+```{r explore}
 
-```{r}
+hdi_clean_import <- read_csv(here("data", "hdi_clean.csv"))
+
+graze_import <- read_csv(here("data", "grazing_env.csv"))
+
+summary(hdi_clean_import)
+
+hdi_data_long <- hdi_clean_import %>%
+  pivot_longer(names_to = 'name', values_to = 'value', where(is.numeric))
+
+ggplot(hdi_data_long, aes(x = value)) +
+  geom_histogram() +
+  facet_wrap(~ name, scales = 'free_x') #facet_wrap 
+
+hdi_data <- hdi_clean_import |>
+  drop_na() |>
+  mutate(gnipc_2021=log(gnipc_2021)) |>
+  mutate(hdicode=factor(hdicode, levels = c('Low','Medium','High','Very High')))
 
 ```
 
-
+-   What do we need to do?
+    -   remove na. (there are none)
+    -   what we pass into the pca has to be numeric
 
 Run the pca using the `prcomp` function. What extra argument do we need to include? Make sure to select only the numeric columns for the pca
 
 ```{r}
 hdi_pca <- hdi_data %>% 
-  select(...) %>%
-  prcomp(...  )
+  select(where(is.numeric)) %>%
+  prcomp(scale=TRUE)
 ```
-
 
 Examine the structure of the hdi_pca object. What do you think each piece means? Use documentation to help you understand the output.
 
-
-
-
-
-
-
-
-
-``` {r}
+```{r}
 # See the loadings (weighting for each principal component)
 hdi_pca$rotation
+
+summary(hdi_pca)
 ```
 
 What can we say about the contributions of these variables to PC1, PC2, and PC3?
+
+
 
 ## Scree Plots
 
@@ -69,21 +90,30 @@ Create a dataframe with the necessary indgreidents to make a screeplot. One piec
 ```{r}
 pc_names <- colnames(hdi_pca$rotation)
 
-# Use this data frame to make the screeplot
-pct_expl_df <- data.frame(pc=pc_names,
+sd_vec <- hdi_pca$sdev
+var_vec <- sd_vec^2 ### standard deviation is sqrt of variance!
+
+
+pct_expl_df <- data.frame(v = var_vec,
+                          pct_v = var_vec / sum(var_vec),
+                          pc = pc_names)
+
                           
-  
-  
-)
+
 
 # Screeplot
 
+pct_expl_plot <- ggplot(pct_expl_df, aes(x=pc, y=pct_v)) +
+  geom_col()+
+  scale_y_continuous(labels=scales::percent, expand=c(0,0)) +
+  theme_minimal()+
+  labs(x = "Variance", y = "Principal Component")
+print(pct_expl_plot)
 
 
 ```
 
-
-We can use ggfortify to create a screeplot as well.  This is a bit more automated, but less flexible. Great for diagnostics, but not for publication.
+We can use ggfortify to create a screeplot as well. This is a bit more automated, but less flexible. Great for diagnostics, but not for publication.
 
 ```{r}
 # Variance explained by each PC
@@ -93,12 +123,11 @@ screeplot(hdi_pca, type = "barplot")
 
 ## ggfortify autoplots
 
-Autoplot can take a PCA object the original dataframe, and plot the observations in the new PC space.  It can also plot the loadings of the variables. Run the code chunk first to see the biplot of HDI data.
+Autoplot can take a PCA object the original dataframe, and plot the observations in the new PC space. It can also plot the loadings of the variables. Run the code chunk first to see the biplot of HDI data.
 
-One cool feature of ggfortify plots is that they follow the same graphics grammar after the initial plot is created.  So you can add layers, change themes, etc. Clean up the biplot to make it more presentable. (Hint: use the data)
+One cool feature of ggfortify plots is that they follow the same graphics grammar after the initial plot is created. So you can add layers, change themes, etc. Clean up the biplot to make it more presentable. (Hint: use the data)
 
-
-``` {r}
+```{r}
 
 autoplot(hdi_pca,
      	data = hdi_data,
@@ -110,10 +139,21 @@ autoplot(hdi_pca,
      	loadings.label.vjust = -0.5
      	) +
   scale_color_manual(values = c('red', 'orange', 'yellowgreen', 'darkgreen')) +
-  theme_minimal()
+  theme_minimal() 
+
+#change
 
 # It's not perfect, but it's enough for now...
 ```
 
+Complete the postlab exercise on your own. The data is stored in the data folder called `grazing_env.csv`. The data is from a study on the effects of grazing on soil properties.
 
-Complete the postlab exercise on your own. The data is stored in the data folder called `grazing_env.csv`.  The data is from a study on the effects of grazing on soil properties.  
+```{r postlab}
+
+
+
+```
+
+
+
+
